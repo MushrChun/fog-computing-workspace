@@ -18,8 +18,11 @@ function handler (req, res) {
 }
 
 io.on('connection', function (socket) {
-  socket.emit('news', { hello: 'world' });
-  socket.on('my other event', function (data) {
+  console.log('connection built');
+
+  socket.on('detection request', function (data) {
+    console.log('detection request');
     console.log(data);
+    socket.emit('detection response', 'image plane');
   });
 });

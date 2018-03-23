@@ -51,6 +51,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,6 +60,14 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
+import com.github.nkzawa.socketio.client.IO;
+import com.github.nkzawa.socketio.client.Socket;
+import com.github.nkzawa.emitter.Emitter;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
 
 public class CameraFragment extends Fragment
         implements View.OnClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
@@ -69,6 +78,13 @@ public class CameraFragment extends Fragment
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String FRAGMENT_DIALOG = "dialog";
+
+    private Socket mSocket;
+    {
+        try {
+            mSocket = IO.socket("http://10.66.31.8:5000");
+        } catch (URISyntaxException e) {}
+    }
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -374,6 +390,8 @@ public class CameraFragment extends Fragment
     public void onResume() {
         super.onResume();
         startBackgroundThread();
+        mSocket.connect();
+        mSocket.on("detection response", onDetectionDoneMessage);
 
         // When the screen is turned off and turned back on, the SurfaceTexture is already
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
@@ -390,8 +408,37 @@ public class CameraFragment extends Fragment
     public void onPause() {
         closeCamera();
         stopBackgroundThread();
+        mSocket.disconnect();
+        mSocket.off("detection response", onDetectionDoneMessage);
         super.onPause();
     }
+
+    private void imgSend() {
+//        showToast("img sent to the server");
+        mSocket.emit("detection request", "I am an image");
+    }
+
+    private Emitter.Listener onDetectionDoneMessage = new Emitter.Listener() {
+        @Override
+        public void call(final Object... args) {
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    showToast((String)args[0]);
+//                    JSONObject data = (JSONObject) args[0];
+//                    String username;
+//                    String message;
+//                    try {
+//                        username = data.getString("username");
+//                        message = data.getString("message");
+//                    } catch (JSONException e) {
+//                        return;
+//                    }
+
+                }
+            });
+        }
+    };
 
     private void requestCameraPermission() {
         if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
@@ -700,6 +747,7 @@ public class CameraFragment extends Fragment
      */
     private void takePicture() {
         showToast("Saved: " + mFile);
+        imgSend();
         mBackgroundHandler.post(new BitmapSaver(mTextureView.getBitmap(), mFile));
     }
 
