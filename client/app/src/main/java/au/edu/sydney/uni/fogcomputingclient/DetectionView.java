@@ -4,9 +4,11 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.util.AttributeSet;
 import android.view.View;
+
+import java.util.ArrayList;
+import java.util.Collection;
 
 /**
  * Created by cshe6391 on 22/03/18.
@@ -14,8 +16,8 @@ import android.view.View;
 
 public class DetectionView extends View {
 
-    Paint paint;
-    Path path;
+    private Paint mPaint4frame;
+    private Paint mPaint4label;
 
     public DetectionView(Context context) {
         super(context);
@@ -33,21 +35,33 @@ public class DetectionView extends View {
     }
 
     private void init(){
-        paint = new Paint();
-        paint.setColor(Color.BLUE);
-        paint.setStrokeWidth(10);
-        paint.setStyle(Paint.Style.STROKE);
+        mPaint4frame = new Paint();
+        mPaint4frame.setColor(Color.BLUE);
+        mPaint4frame.setStrokeWidth(8);
+        mPaint4frame.setStyle(Paint.Style.STROKE);
 
+
+        mPaint4label = new Paint();
+        mPaint4label.setColor(Color.YELLOW);
+        mPaint4label.setTextSize(48);
+        mFrames = new ArrayList<>();
+    }
+
+    private Collection<DetectionFrame> mFrames;
+
+    public void refreshDetectionFrame(Collection<DetectionFrame>  newFrameSet){
+        mFrames.clear();
+        mFrames.addAll(newFrameSet);
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
-        // TODO Auto-generated method stub
         super.onDraw(canvas);
 
-        canvas.drawRect(30, 50, 200, 350, paint);
-        canvas.drawRect(100, 100, 300, 400, paint);
-        //drawRect(left, top, right, bottom, paint)
+        for(DetectionFrame frame: mFrames){
+            canvas.drawRect(frame.x, frame.y, frame.x + frame.w, frame.y + frame.h, mPaint4frame);
+            canvas.drawText(frame.label, frame.x, frame.y - 20, mPaint4label);
+        }
 
     }
 }

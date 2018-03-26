@@ -4,25 +4,44 @@ const fs = require('fs');
 
 app.listen(5000);
 
-function handler (req, res) {
+function handler(req, res) {
   fs.readFile(__dirname + '/index.html',
-  function (err, data) {
-    if (err) {
-      res.writeHead(500);
-      return res.end('Error loading index.html');
-    }
+    function (err, data) {
+      if (err) {
+        res.writeHead(500);
+        return res.end('Error loading index.html');
+      }
 
-    res.writeHead(200);
-    res.end(data);
-  });
+      res.writeHead(200);
+      res.end(data);
+    });
 }
 
 io.on('connection', function (socket) {
-  console.log('connection built');
+  console.log('connect');
 
   socket.on('detection request', function (data) {
     console.log('detection request');
     console.log(data);
-    socket.emit('detection response', 'image plane');
+    const frame = [
+      {
+        x: 400,
+        y: 400,
+        w: 200,
+        h: 200,
+        label: 'object1'
+      },
+      {
+        x: 670,
+        y: 1200,
+        w: 123,
+        h: 645,
+        label: 'object2'}
+    ];
+    socket.emit('detection response', frame);
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('disconnect');
   });
 });

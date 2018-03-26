@@ -51,10 +51,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -65,8 +67,9 @@ import com.github.nkzawa.socketio.client.IO;
 import com.github.nkzawa.socketio.client.Socket;
 import com.github.nkzawa.emitter.Emitter;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import org.json.JSONArray;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 
 public class CameraFragment extends Fragment
@@ -266,6 +269,8 @@ public class CameraFragment extends Fragment
      */
     private int mSensorOrientation;
 
+    private DetectionView mDetectionView;
+
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
      */
@@ -378,6 +383,7 @@ public class CameraFragment extends Fragment
         view.findViewById(R.id.picture).setOnClickListener(this);
         view.findViewById(R.id.info).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
+        mDetectionView = view.findViewById(R.id.detection);
     }
 
     @Override
@@ -424,17 +430,15 @@ public class CameraFragment extends Fragment
             getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    showToast((String)args[0]);
-//                    JSONObject data = (JSONObject) args[0];
-//                    String username;
-//                    String message;
-//                    try {
-//                        username = data.getString("username");
-//                        message = data.getString("message");
-//                    } catch (JSONException e) {
-//                        return;
-//                    }
-
+                    Gson gson = new Gson();
+                    Type collectionType = new TypeToken<Collection<DetectionFrame>>(){}.getType();
+                    String data = ((JSONArray)args[0]).toString();
+                    Collection<DetectionFrame> frames = gson.fromJson(data, collectionType);
+                    for (DetectionFrame frame:frames) {
+                        showToast(frame.toString());
+                    }
+                    mDetectionView.refreshDetectionFrame(frames);
+                    mDetectionView.invalidate();
                 }
             });
         }
