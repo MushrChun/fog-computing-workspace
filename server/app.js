@@ -22,7 +22,11 @@ io.on('connection', function (socket) {
 
   socket.on('detection request', function (data) {
     console.log('detection request');
-    console.log(data);
+    const imageBuf = Buffer.from(data.imageData, 'base64');
+    fs.writeFile('testfile', imageBuf, (err)=> {
+      if(err) console.log(err);
+      console.log('image saved');
+    });
     const frame = [
       {
         x: 400,

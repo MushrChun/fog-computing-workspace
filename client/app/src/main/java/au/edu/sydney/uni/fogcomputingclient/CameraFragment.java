@@ -37,6 +37,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
+import android.util.Base64;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
@@ -68,6 +69,9 @@ import com.github.nkzawa.socketio.client.Socket;
 import com.github.nkzawa.emitter.Emitter;
 
 import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -421,7 +425,9 @@ public class CameraFragment extends Fragment
 
     private void imgSend() {
 //        showToast("img sent to the server");
-        mSocket.emit("detection request", "I am an image");
+
+        mBackgroundHandler.post(new BitmapShifter(mTextureView.getBitmap(), mSocket));
+//        mSocket.emit("detection request", "I am an image");
     }
 
     private Emitter.Listener onDetectionDoneMessage = new Emitter.Listener() {
@@ -750,9 +756,7 @@ public class CameraFragment extends Fragment
      * Initiate a still image capture.
      */
     private void takePicture() {
-        showToast("Saved: " + mFile);
         imgSend();
-        mBackgroundHandler.post(new BitmapSaver(mTextureView.getBitmap(), mFile));
     }
 
     @Override
@@ -862,6 +866,40 @@ public class CameraFragment extends Fragment
                         e.printStackTrace();
                     }
                 }
+            }
+        }
+
+    }
+
+    private static class BitmapShifter implements Runnable {
+
+        /**
+         * The Bitmap
+         */
+        private final Bitmap mBitmap;
+        private Socket mSocket;
+
+        BitmapShifter(Bitmap bitmap, Socket socket) {
+            mBitmap = bitmap;
+            mSocket = socket;
+        }
+
+        private String encodeImage() {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            mBitmap.compress(Bitmap.CompressFormat.JPEG, 90, bytes); //90: 470kb 100:1.25mb - picture size
+            byte[] b = bytes.toByteArray();
+            String encImage = Base64.encodeToString(b, Base64.DEFAULT);
+            return encImage;
+        }
+
+        @Override
+        public void run() {
+            JSONObject sendData = new JSONObject();
+            try {
+                sendData.put("imageData", encodeImage());
+                mSocket.emit("detection request", sendData);
+            } catch (JSONException e) {
+                e.printStackTrace();
             }
         }
 
