@@ -1,6 +1,7 @@
 const app = require('http').createServer(handler);
 const io = require('socket.io')(app);
 const fs = require('fs');
+const cv = require('opencv');
 
 app.listen(5000);
 
@@ -23,26 +24,29 @@ io.on('connection', function (socket) {
   socket.on('detection request', function (data) {
     console.log('detection request');
     const imageBuf = Buffer.from(data.imageData, 'base64');
-    fs.writeFile('testfile', imageBuf, (err)=> {
-      if(err) console.log(err);
-      console.log('image saved');
+    cv.readImage(imageBuf, (err, im) => {
+      if (err) {
+        throw err;
+      }
+
+      if (im.width() < 1 || im.height() < 1) throw new Error('Image has no size');
+
+      im.detectObject('./haarcascade_frontalface_alt.xml', {}, function (err, faces) {
+        if (err) throw err;
+        const frames = [];
+        faces.forEach(face => {
+          const newFrame = {};
+          newFrame.x = face.x;
+          newFrame.y = face.y;
+          newFrame.w = face.width;
+          newFrame.h = face.height;
+          newFrame.label = 'face';
+          frames.push(newFrame);
+        });
+        console.log(faces);
+        socket.emit('detection response', frames);
+      });
     });
-    const frame = [
-      {
-        x: 400,
-        y: 400,
-        w: 200,
-        h: 200,
-        label: 'object1'
-      },
-      {
-        x: 670,
-        y: 1200,
-        w: 123,
-        h: 645,
-        label: 'object2'}
-    ];
-    socket.emit('detection response', frame);
   });
 
   socket.on('disconnect', (reason) => {
