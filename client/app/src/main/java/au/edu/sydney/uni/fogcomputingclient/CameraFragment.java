@@ -61,6 +61,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -226,6 +228,10 @@ public class CameraFragment extends Fragment
      * This is the output file for our picture.
      */
     private File mFile;
+
+    private Timer mTimer;
+
+    private TimerTask mTimerTask;
 
     /**
      * This a callback object for the {@link ImageReader}. "onImageAvailable" will be called when a
@@ -412,6 +418,8 @@ public class CameraFragment extends Fragment
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
+
+        setTimer();
     }
 
     @Override
@@ -420,14 +428,34 @@ public class CameraFragment extends Fragment
         stopBackgroundThread();
         mSocket.disconnect();
         mSocket.off("detection response", onDetectionDoneMessage);
+        stopTimer();
         super.onPause();
     }
 
-    private void imgSend() {
-//        showToast("img sent to the server");
+    private void setTimer() {
+        mTimer = new Timer();
+        mTimerTask = new TimerTask() {
+            @Override
+            public void run() {
+                imgSend();
+            }
+        };
+        mTimer.schedule(mTimerTask, 1000, 500);
+    }
 
-        mBackgroundHandler.post(new BitmapShifter(mTextureView.getBitmap(), mSocket));
-//        mSocket.emit("detection request", "I am an image");
+    private void stopTimer() {
+        if(mTimer != null) {
+            mTimer.cancel();
+            mTimer = null;
+            mTimerTask = null;
+        }
+    }
+
+    private void imgSend() {
+        Bitmap bitmap = mTextureView.getBitmap();
+        if(bitmap != null){
+            mBackgroundHandler.post(new BitmapShifter(bitmap, mSocket));
+        }
     }
 
     private Emitter.Listener onDetectionDoneMessage = new Emitter.Listener() {
