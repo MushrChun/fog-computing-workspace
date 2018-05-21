@@ -31,11 +31,11 @@
         android:background="@color/control_background">
 
         <Button
-            android:id="@+id/picture"
+            android:id="@+id/toggle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:text="@string/picture" />
+            android:text="@string/toggle" />
 
         <ImageButton
             android:id="@+id/info"

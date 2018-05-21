@@ -46,6 +46,7 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
@@ -73,6 +74,11 @@ import com.github.nkzawa.emitter.Emitter;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -86,6 +92,7 @@ public class CameraFragment extends Fragment
      */
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     private static final int REQUEST_CAMERA_PERMISSION = 1;
+    private static final int REQUEST_EXTERNAL_STORAGE_PERMISSION = 2;
     private static final String FRAGMENT_DIALOG = "dialog";
 
     private Socket mSocket;
@@ -281,6 +288,15 @@ public class CameraFragment extends Fragment
 
     private DetectionView mDetectionView;
 
+    private int mComputingMode = FOG_MODE;
+
+    public final static int LOCAL_MODE = 0;
+    public final static int FOG_MODE = 1;
+
+    private Button mToggleButton;
+
+    private Mat mCacheMat = new Mat();
+
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
      */
@@ -390,7 +406,9 @@ public class CameraFragment extends Fragment
 
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
-        view.findViewById(R.id.picture).setOnClickListener(this);
+        mToggleButton = view.findViewById(R.id.toggle);
+        mToggleButton.setOnClickListener(this);
+        mToggleButton.setText(mComputingMode==LOCAL_MODE?R.string.local_mode:R.string.fog_mode);
         view.findViewById(R.id.info).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
         mDetectionView = view.findViewById(R.id.detection);
@@ -408,6 +426,18 @@ public class CameraFragment extends Fragment
         startBackgroundThread();
         mSocket.connect();
         mSocket.on("detection response", onDetectionDoneMessage);
+
+        if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestExternalStoragePermission();
+            return;
+        }
+
+        if (!OpenCVLoader.initDebug()) {
+            Log.d(TAG, "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+        } else {
+            Log.d(TAG, "OpenCV library found inside package. Using it!");
+        }
 
         // When the screen is turned off and turned back on, the SurfaceTexture is already
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
@@ -454,7 +484,12 @@ public class CameraFragment extends Fragment
     private void imgSend() {
         Bitmap bitmap = mTextureView.getBitmap();
         if(bitmap != null){
-            mBackgroundHandler.post(new BitmapShifter(bitmap, mSocket));
+            if(mComputingMode==LOCAL_MODE){
+                mBackgroundHandler.post(new BitmapFeeder(bitmap));
+            }
+            else if(mComputingMode==FOG_MODE){
+                mBackgroundHandler.post(new BitmapShifter(bitmap, mSocket));
+            }
         }
     }
 
@@ -468,9 +503,9 @@ public class CameraFragment extends Fragment
                     Type collectionType = new TypeToken<Collection<DetectionFrame>>(){}.getType();
                     String data = ((JSONArray)args[0]).toString();
                     Collection<DetectionFrame> frames = gson.fromJson(data, collectionType);
-                    for (DetectionFrame frame:frames) {
-                        showToast(frame.toString());
-                    }
+//                    for (DetectionFrame frame:frames) {
+//                        showToast(frame.toString());
+//                    }
                     mDetectionView.refreshDetectionFrame(frames);
                     mDetectionView.invalidate();
                 }
@@ -483,6 +518,14 @@ public class CameraFragment extends Fragment
             new ConfirmationDialog().show(getChildFragmentManager(), FRAGMENT_DIALOG);
         } else {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+        }
+    }
+
+    private void requestExternalStoragePermission() {
+        if (shouldShowRequestPermissionRationale(Manifest.permission.READ_EXTERNAL_STORAGE)) {
+            new ConfirmationDialog().show(getChildFragmentManager(), FRAGMENT_DIALOG);
+        } else {
+            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_EXTERNAL_STORAGE_PERMISSION);
         }
     }
 
@@ -790,8 +833,14 @@ public class CameraFragment extends Fragment
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
-            case R.id.picture: {
-                takePicture();
+            case R.id.toggle: {
+                if(mComputingMode==LOCAL_MODE){
+                    mComputingMode=FOG_MODE;
+                    mToggleButton.setText(R.string.fog_mode);
+                }else{
+                    mComputingMode=LOCAL_MODE;
+                    mToggleButton.setText(R.string.local_mode);
+                }
                 break;
             }
             case R.id.info: {
@@ -933,6 +982,55 @@ public class CameraFragment extends Fragment
 
     }
 
+    private class BitmapFeeder implements Runnable {
+
+        /**
+         * The Bitmap
+         */
+        private final Bitmap mBitmap;
+
+//        private final Mat cacheMat = new Mat();
+
+        BitmapFeeder(Bitmap bitmap) {
+            mBitmap = bitmap;
+        }
+
+        private Mat img2mat() {
+            Bitmap bmp32 = mBitmap.copy(Bitmap.Config.ARGB_8888, true);
+            Utils.bitmapToMat(bmp32, mCacheMat);
+//            mBitmap.recycle();
+//            bmp32.recycle();
+            return mCacheMat;
+        }
+
+        @Override
+        public void run() {
+//            Mat mat = img2mat();
+
+            DetectionFrame [] rects = detect(mCacheMat.getNativeObjAddr());
+//            mat.release();
+            getActivity().runOnUiThread(new frameRefreshRunnable(rects, mDetectionView));
+        }
+
+    }
+
+    private class frameRefreshRunnable implements Runnable{
+
+        private DetectionView mDetectionView;
+        private Collection<DetectionFrame> frames;
+
+        public frameRefreshRunnable(DetectionFrame[] framesArray,DetectionView detectionView) {
+            this.mDetectionView = detectionView;
+            this.frames = Arrays.asList(framesArray);
+        }
+
+        @Override
+        public void run() {
+            mDetectionView.refreshDetectionFrame(frames);
+            mDetectionView.invalidate();
+        }
+    }
+
     /**
      * Compares two {@code Size}s based on their areas.
      */
@@ -1010,5 +1108,7 @@ public class CameraFragment extends Fragment
                     .create();
         }
     }
+
+    public native DetectionFrame[] detect(long addrRgba);
 
 }
