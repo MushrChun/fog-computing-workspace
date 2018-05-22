@@ -989,25 +989,25 @@ public class CameraFragment extends Fragment
          */
         private final Bitmap mBitmap;
 
-//        private final Mat cacheMat = new Mat();
-
         BitmapFeeder(Bitmap bitmap) {
             mBitmap = bitmap;
         }
 
         private Mat img2mat() {
+            Mat cacheMat = new Mat();
             Bitmap bmp32 = mBitmap.copy(Bitmap.Config.ARGB_8888, true);
-            Utils.bitmapToMat(bmp32, mCacheMat);
+            Utils.bitmapToMat(bmp32, cacheMat);
 //            mBitmap.recycle();
 //            bmp32.recycle();
-            return mCacheMat;
+            return cacheMat;
         }
 
         @Override
         public void run() {
-//            Mat mat = img2mat();
-
-            DetectionFrame [] rects = detect(mCacheMat.getNativeObjAddr());
+            showToast("start Bitmap Feeder!");
+            Mat mat = img2mat();
+            showToast(String.valueOf(mat.getNativeObjAddr()));
+            DetectionFrame [] rects = detect(mat.getNativeObjAddr());
 //            mat.release();
             getActivity().runOnUiThread(new frameRefreshRunnable(rects, mDetectionView));
         }
