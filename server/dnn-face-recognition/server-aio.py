@@ -1,38 +1,36 @@
 import socketio
-import eventlet
 import os
 import base64
 import time
 import io
+from datetime import datetime
 import face_recognition
-from flask import Flask, render_template
 
-sio = socketio.Server()
-app = Flask(__name__)
+from aiohttp import web
 
-@app.route('/')
-def index():
-    """Serve the client-side application."""
-    return render_template('index.html')
+
+sio = socketio.AsyncServer()
+app = web.Application()
+sio.attach(app)
+
 
 @sio.on('connect')
 def connect(sid, environ):
-    print('connect ', sid)
+    print('connect to a fog client at: ', datetime.now(), sid)
 
 @sio.on('detection request')
-def task(sid, data):
-
+async def task(sid, data):
+    print('beginning of the request from a fog client at: ', datetime.now(), sid)
     target_image = base64.b64decode(data['imageData'])
-    print('detection request ')
+    
     detected_faces = detect_face(target_image)
     # detected_faces = dummy_face()
-    print(detected_faces)
-    
-    sio.emit('detection response', detected_faces)
+    # print(detected_faces)
+    await sio.emit('detection response', detected_faces)
 
 @sio.on('disconnect')
 def disconnect(sid):
-    print('disconnect ', sid)
+    print('disconnect to a fog client at: ', datetime.now(), sid)
 
 
 def find_images():
@@ -80,13 +78,13 @@ def detect_face(imageStream):
     # with open(str(time.time())+'.jpg','wb+') as f:
     #  f.write(imageStream)
     image = face_recognition.load_image_file(io.BytesIO(imageStream))
-
+    print('finish load the image at: ', datetime.now())
+    print('=>beginning of the face detection at: ', datetime.now())
     face_locations = face_recognition.face_locations(image)
+    print('<=end of the face detection at: ', datetime.now())
     frames = []
     for face_location in face_locations:
         top, right, bottom, left = face_location
-        # print("A face is located at pixel location Top: {}, Left: {}, Bottom: {}, Right: {}".format(top, left, bottom, right))
-
         newFrame = {}
         newFrame['x'] = left
         newFrame['y'] = top
@@ -94,14 +92,8 @@ def detect_face(imageStream):
         newFrame['h'] = top-bottom
         newFrame['label'] = 'face'
         frames.append(newFrame)
-    print('finish detection!')
     return frames
 
 
 if __name__ == '__main__':
-
-    # wrap Flask application with socketio's middleware
-    app = socketio.Middleware(sio, app)
-
-    # deploy as an eventlet WSGI server
-    eventlet.wsgi.server(eventlet.listen(('', 8000)), app)
+    web.run_app(app)
