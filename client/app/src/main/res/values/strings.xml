@@ -2,15 +2,19 @@
     <string name="app_name">fogcomputingclient</string>
     <string name="picture">Picture</string>
     <string name="toggle">Local Mode</string>
+    <string name="native_mode">Native Mode</string>
     <string name="local_mode">Local Mode</string>
     <string name="fog_mode">Fog Mode</string>
+    <string name="fog_basic">Fog Basic Mode</string>
+    <string name="fog_dnn">Fog DNN Mode</string>
+    <string name="fog_cloud">Fog Cloud Mode</string>
     <string name="description_info">Info</string>
+    <string name="info">Info</string>
     <string name="request_permission">This sample needs camera permission.</string>
     <string name="camera_error">This device doesn\'t support Camera2 API.</string>
     <string name="intro_message">
     <![CDATA[
-            This sample demonstrates the basic use of Camera2 API. Check the source code to see how
-            you can display camera preview and take pictures.
+            This sample demonstrates face recognition in Fog Computing Scenario
         ]]>
     </string>
 </resources>

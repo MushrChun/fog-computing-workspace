@@ -10,6 +10,7 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -74,17 +75,16 @@ import com.github.nkzawa.emitter.Emitter;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
+import org.opencv.imgproc.Imgproc;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 
-public class CameraFragment extends Fragment
+public class MainFragment extends Fragment
         implements View.OnClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
 
     /**
@@ -98,7 +98,9 @@ public class CameraFragment extends Fragment
     private Socket mSocket;
     {
         try {
-            mSocket = IO.socket("http://10.66.31.8:5000");
+//            mSocket = IO.socket("http://10.66.31.8:5000");
+//            mSocket = IO.socket("http://10.66.31.8:8000");
+            mSocket = IO.socket("http://10.66.31.8:8080");
         } catch (URISyntaxException e) {}
     }
 
@@ -109,10 +111,12 @@ public class CameraFragment extends Fragment
         ORIENTATIONS.append(Surface.ROTATION_270, 180);
     }
 
+    private static final String FOG_NODE_URL = "http://10.66.31.8:";
+
     /**
      * Tag for the {@link Log}.
      */
-    private static final String TAG = "CameraFragment";
+    private static final String TAG = "MainFragment";
 
     /**
      * Camera state: Showing camera preview.
@@ -288,14 +292,17 @@ public class CameraFragment extends Fragment
 
     private DetectionView mDetectionView;
 
-    private int mComputingMode = FOG_MODE;
+    private int mComputingMode = FOG_BASIC_MODE;
 
     public final static int LOCAL_MODE = 0;
-    public final static int FOG_MODE = 1;
+    public final static int FOG_BASIC_MODE = 1;
+    public final static int FOG_DNN_MODE = 2;
+    public final static int FOG_CLOUD_MODE = 3;
 
-    private Button mToggleButton;
 
     private Mat mCacheMat = new Mat();
+
+    private FaceDetectionHelper mFaceDetectionHelper;
 
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
@@ -394,8 +401,8 @@ public class CameraFragment extends Fragment
         }
     }
 
-    public static CameraFragment newInstance() {
-        return new CameraFragment();
+    public static MainFragment newInstance() {
+        return new MainFragment();
     }
 
     @Override
@@ -406,9 +413,11 @@ public class CameraFragment extends Fragment
 
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
-        mToggleButton = view.findViewById(R.id.toggle);
-        mToggleButton.setOnClickListener(this);
-        mToggleButton.setText(mComputingMode==LOCAL_MODE?R.string.local_mode:R.string.fog_mode);
+        view.findViewById(R.id.native_mode).setOnClickListener(this);
+        view.findViewById(R.id.local_mode).setOnClickListener(this);
+        view.findViewById(R.id.fog_basic).setOnClickListener(this);
+        view.findViewById(R.id.fog_dnn).setOnClickListener(this);
+        view.findViewById(R.id.fog_cloud).setOnClickListener(this);
         view.findViewById(R.id.info).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
         mDetectionView = view.findViewById(R.id.detection);
@@ -418,6 +427,7 @@ public class CameraFragment extends Fragment
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
         mFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
+        mFaceDetectionHelper = new FaceDetectionHelper();
     }
 
     @Override
@@ -485,9 +495,9 @@ public class CameraFragment extends Fragment
         Bitmap bitmap = mTextureView.getBitmap();
         if(bitmap != null){
             if(mComputingMode==LOCAL_MODE){
-                mBackgroundHandler.post(new BitmapFeeder(bitmap));
+                mBackgroundHandler.post(new BitmapFeeder(bitmap, mFaceDetectionHelper));
             }
-            else if(mComputingMode==FOG_MODE){
+            else if(mComputingMode==FOG_BASIC_MODE){
                 mBackgroundHandler.post(new BitmapShifter(bitmap, mSocket));
             }
         }
@@ -499,9 +509,14 @@ public class CameraFragment extends Fragment
             getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+
+//                    Log.e("mushrchun", "in return");
                     Gson gson = new Gson();
                     Type collectionType = new TypeToken<Collection<DetectionFrame>>(){}.getType();
+//                    Log.e("mushrchun", "in return");
+//                    Log.e("mushrchun", (String) args[0]);
                     String data = ((JSONArray)args[0]).toString();
+//                    Log.e("mushrchun", data);
                     Collection<DetectionFrame> frames = gson.fromJson(data, collectionType);
 //                    for (DetectionFrame frame:frames) {
 //                        showToast(frame.toString());
@@ -658,7 +673,7 @@ public class CameraFragment extends Fragment
     }
 
     /**
-     * Opens the camera specified by {@link CameraFragment#mCameraId}.
+     * Opens the camera specified by {@link MainFragment#mCameraId}.
      */
     private void openCamera(int width, int height) {
         if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA)
@@ -830,17 +845,47 @@ public class CameraFragment extends Fragment
         imgSend();
     }
 
+    private void changeSocket(String port) {
+
+        mSocket.disconnect();
+        mSocket.off("detection response", onDetectionDoneMessage);
+        try {
+            mSocket = IO.socket(FOG_NODE_URL + port);
+        } catch (URISyntaxException e) {}
+        mSocket.connect();
+        mSocket.on("detection response", onDetectionDoneMessage);
+    }
+
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
-            case R.id.toggle: {
-                if(mComputingMode==LOCAL_MODE){
-                    mComputingMode=FOG_MODE;
-                    mToggleButton.setText(R.string.fog_mode);
-                }else{
-                    mComputingMode=LOCAL_MODE;
-                    mToggleButton.setText(R.string.local_mode);
-                }
+            case R.id.native_mode: {
+                Intent intent = new Intent(getActivity(), NativeModeActivity.class);
+                startActivity(intent);
+                showToast("Native Mode Activated");
+                break;
+            }
+            case R.id.local_mode: {
+                mComputingMode = LOCAL_MODE;
+                showToast("Local Mode Activated");
+                break;
+            }
+            case R.id.fog_basic: {
+                mComputingMode = FOG_BASIC_MODE;
+                changeSocket("5000");
+                showToast("Fog Basic Activated");
+                break;
+            }
+            case R.id.fog_dnn: {
+                mComputingMode = FOG_DNN_MODE;
+                changeSocket("8080");
+                showToast("Fog DNN Activated");
+                break;
+            }
+            case R.id.fog_cloud: {
+                mComputingMode = FOG_CLOUD_MODE;
+                changeSocket("8080");
+                showToast("Fog Cloud Activated");
                 break;
             }
             case R.id.info: {
@@ -851,7 +896,6 @@ public class CameraFragment extends Fragment
                             .setPositiveButton(android.R.string.ok, null)
                             .show();
                 }
-                break;
             }
         }
     }
@@ -982,33 +1026,64 @@ public class CameraFragment extends Fragment
 
     }
 
+
+
+//    private class BitmapFeeder implements Runnable {
+//
+//        /**
+//         * The Bitmap
+//         */
+//        private final Bitmap mBitmap;
+//
+//        BitmapFeeder(Bitmap bitmap) {
+//            mBitmap = bitmap;
+//        }
+//
+//        private Mat img2mat() {
+//            Mat cacheMat = new Mat();
+//            Bitmap bmp32 = mBitmap.copy(Bitmap.Config.ARGB_8888, true);
+//            Utils.bitmapToMat(bmp32, cacheMat);
+////            mBitmap.recycle();
+////            bmp32.recycle();
+//            return cacheMat;
+//        }
+//
+//        @Override
+//        public void run() {
+//            showToast("start Bitmap Feeder!");
+//            Mat mat = img2mat();
+//            showToast(String.valueOf(mat.getNativeObjAddr()));
+//            DetectionFrame [] rects = detect(mat.getNativeObjAddr());
+////            mat.release();
+//            getActivity().runOnUiThread(new frameRefreshRunnable(rects, mDetectionView));
+//        }
+//
+//    }
+
+
     private class BitmapFeeder implements Runnable {
 
         /**
          * The Bitmap
          */
         private final Bitmap mBitmap;
+        private FaceDetectionHelper mFaceDetectionHelper;
 
-        BitmapFeeder(Bitmap bitmap) {
+        BitmapFeeder(Bitmap bitmap, FaceDetectionHelper faceDetectionHelper) {
             mBitmap = bitmap;
+            mFaceDetectionHelper = faceDetectionHelper;
         }
 
         private Mat img2mat() {
-            Mat cacheMat = new Mat();
-            Bitmap bmp32 = mBitmap.copy(Bitmap.Config.ARGB_8888, true);
-            Utils.bitmapToMat(bmp32, cacheMat);
-//            mBitmap.recycle();
-//            bmp32.recycle();
-            return cacheMat;
+            Utils.bitmapToMat(mBitmap, mCacheMat);
+            Imgproc.cvtColor(mCacheMat, mCacheMat, Imgproc.COLOR_BGR2GRAY);
+            return mCacheMat;
         }
 
         @Override
         public void run() {
-            showToast("start Bitmap Feeder!");
             Mat mat = img2mat();
-            showToast(String.valueOf(mat.getNativeObjAddr()));
-            DetectionFrame [] rects = detect(mat.getNativeObjAddr());
-//            mat.release();
+            DetectionFrame[] rects = mFaceDetectionHelper.detect(mat, 30);
             getActivity().runOnUiThread(new frameRefreshRunnable(rects, mDetectionView));
         }
 
@@ -1109,6 +1184,6 @@ public class CameraFragment extends Fragment
         }
     }
 
-    public native DetectionFrame[] detect(long addrRgba);
+//    public native DetectionFrame[] detect(long addrRgba);
 
 }

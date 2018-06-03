@@ -67,7 +67,7 @@ JNICALL Java_au_edu_sydney_uni_fogcomputingclient_CameraFragment_detect(
         jlong addrRgba /* this */){
     cv::Mat& frame = * (cv::Mat*)addrRgba;
     std::vector<cv::Rect>* rects = detect(frame);
-//    delete &frame;
+    delete &frame;
     size_t rectsSize = rects->size();
     jsize rectsJsize = rectsSize;
     jclass detectionFrameClass = (*env).FindClass("au/edu/sydney/uni/fogcomputingclient/DetectionFrame");
