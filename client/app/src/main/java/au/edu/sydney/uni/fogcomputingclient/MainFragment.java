@@ -10,6 +10,7 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -56,8 +57,11 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -74,17 +78,16 @@ import com.github.nkzawa.emitter.Emitter;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
+import org.opencv.imgproc.Imgproc;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 
-public class CameraFragment extends Fragment
+public class MainFragment extends Fragment
         implements View.OnClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
 
     /**
@@ -96,11 +99,13 @@ public class CameraFragment extends Fragment
     private static final String FRAGMENT_DIALOG = "dialog";
 
     private Socket mSocket;
-    {
-        try {
-            mSocket = IO.socket("http://10.66.31.8:5000");
-        } catch (URISyntaxException e) {}
-    }
+//    {
+//        try {
+////            mSocket = IO.socket("http://10.66.31.8:5000");
+////            mSocket = IO.socket("http://10.66.31.8:8000");
+//            mSocket = IO.socket("http://10.66.31.8:8080");
+//        } catch (URISyntaxException e) {}
+//    }
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -109,10 +114,14 @@ public class CameraFragment extends Fragment
         ORIENTATIONS.append(Surface.ROTATION_270, 180);
     }
 
+    private static final String FOG_NODE_URL = "http://10.66.31.8:";
+
     /**
      * Tag for the {@link Log}.
      */
-    private static final String TAG = "CameraFragment";
+    private static final String TAG = "MainFragment";
+
+    private static final String TAG_MEASURE = "MEASURE";
 
     /**
      * Camera state: Showing camera preview.
@@ -288,14 +297,18 @@ public class CameraFragment extends Fragment
 
     private DetectionView mDetectionView;
 
-    private int mComputingMode = FOG_MODE;
+    private int mComputingMode = FOG_BASIC_MODE;
 
+    public final static int IDLE_MODE = -1;
     public final static int LOCAL_MODE = 0;
-    public final static int FOG_MODE = 1;
+    public final static int FOG_BASIC_MODE = 1;
+    public final static int FOG_DNN_MODE = 2;
+    public final static int FOG_CLOUD_MODE = 3;
 
-    private Button mToggleButton;
 
     private Mat mCacheMat = new Mat();
+
+    private FaceDetectionHelper mFaceDetectionHelper;
 
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
@@ -394,8 +407,8 @@ public class CameraFragment extends Fragment
         }
     }
 
-    public static CameraFragment newInstance() {
-        return new CameraFragment();
+    public static MainFragment newInstance() {
+        return new MainFragment();
     }
 
     @Override
@@ -406,10 +419,12 @@ public class CameraFragment extends Fragment
 
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
-        mToggleButton = view.findViewById(R.id.toggle);
-        mToggleButton.setOnClickListener(this);
-        mToggleButton.setText(mComputingMode==LOCAL_MODE?R.string.local_mode:R.string.fog_mode);
-        view.findViewById(R.id.info).setOnClickListener(this);
+        view.findViewById(R.id.native_mode).setOnClickListener(this);
+        view.findViewById(R.id.local_mode).setOnClickListener(this);
+        view.findViewById(R.id.fog_basic).setOnClickListener(this);
+        view.findViewById(R.id.fog_dnn).setOnClickListener(this);
+        view.findViewById(R.id.fog_cloud).setOnClickListener(this);
+        view.findViewById(R.id.reset).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
         mDetectionView = view.findViewById(R.id.detection);
     }
@@ -418,14 +433,17 @@ public class CameraFragment extends Fragment
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
         mFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
+        mFaceDetectionHelper = new FaceDetectionHelper();
     }
 
     @Override
     public void onResume() {
         super.onResume();
         startBackgroundThread();
-        mSocket.connect();
-        mSocket.on("detection response", onDetectionDoneMessage);
+        if(mSocket!=null){
+            mSocket.connect();
+            mSocket.on("detection response", onDetectionDoneMessage);
+        }
 
         if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -449,20 +467,26 @@ public class CameraFragment extends Fragment
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
 
-        setTimer();
     }
 
     @Override
     public void onPause() {
         closeCamera();
         stopBackgroundThread();
-        mSocket.disconnect();
-        mSocket.off("detection response", onDetectionDoneMessage);
+        mDetectionView.reset();
+        if(mSocket!=null){
+            mSocket.disconnect();
+            mSocket.off("detection response", onDetectionDoneMessage);
+        }
         stopTimer();
         super.onPause();
     }
 
     private void setTimer() {
+        setTimer(1000, 500);
+    }
+
+    public void setTimer(int delay, int period){
         mTimer = new Timer();
         mTimerTask = new TimerTask() {
             @Override
@@ -470,7 +494,7 @@ public class CameraFragment extends Fragment
                 imgSend();
             }
         };
-        mTimer.schedule(mTimerTask, 1000, 500);
+        mTimer.schedule(mTimerTask, delay, period);
     }
 
     private void stopTimer() {
@@ -483,11 +507,11 @@ public class CameraFragment extends Fragment
 
     private void imgSend() {
         Bitmap bitmap = mTextureView.getBitmap();
-        if(bitmap != null){
+        if(bitmap != null && mBackgroundHandler !=null){
             if(mComputingMode==LOCAL_MODE){
-                mBackgroundHandler.post(new BitmapFeeder(bitmap));
+                mBackgroundHandler.post(new BitmapFeeder(bitmap, mFaceDetectionHelper));
             }
-            else if(mComputingMode==FOG_MODE){
+            else{
                 mBackgroundHandler.post(new BitmapShifter(bitmap, mSocket));
             }
         }
@@ -499,19 +523,29 @@ public class CameraFragment extends Fragment
             getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+
+                    Log.i(TAG_MEASURE, "<= Receive Detection:" + getNiceTime());
                     Gson gson = new Gson();
                     Type collectionType = new TypeToken<Collection<DetectionFrame>>(){}.getType();
+//                    Log.e("mushrchun", "in return");
+//                    Log.e("mushrchun", (String) args[0]);
                     String data = ((JSONArray)args[0]).toString();
+//                    Log.e("mushrchun", data);
                     Collection<DetectionFrame> frames = gson.fromJson(data, collectionType);
 //                    for (DetectionFrame frame:frames) {
 //                        showToast(frame.toString());
 //                    }
                     mDetectionView.refreshDetectionFrame(frames);
-                    mDetectionView.invalidate();
                 }
             });
         }
     };
+
+    private String getNiceTime(){
+        DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+        String date = df.format(Calendar.getInstance().getTime());
+        return date;
+    }
 
     private void requestCameraPermission() {
         if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
@@ -658,7 +692,7 @@ public class CameraFragment extends Fragment
     }
 
     /**
-     * Opens the camera specified by {@link CameraFragment#mCameraId}.
+     * Opens the camera specified by {@link MainFragment#mCameraId}.
      */
     private void openCamera(int width, int height) {
         if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA)
@@ -830,29 +864,77 @@ public class CameraFragment extends Fragment
         imgSend();
     }
 
+    private void changeSocket(String port) {
+
+        if(mSocket!=null){
+            mSocket.disconnect();
+            mSocket.off("detection response", onDetectionDoneMessage);
+        }
+        try {
+            mSocket = IO.socket(FOG_NODE_URL + port);
+        } catch (URISyntaxException e) {}
+        mSocket.connect();
+        mSocket.on("detection response", onDetectionDoneMessage);
+    }
+
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
-            case R.id.toggle: {
-                if(mComputingMode==LOCAL_MODE){
-                    mComputingMode=FOG_MODE;
-                    mToggleButton.setText(R.string.fog_mode);
-                }else{
-                    mComputingMode=LOCAL_MODE;
-                    mToggleButton.setText(R.string.local_mode);
-                }
+            case R.id.native_mode: {
+                Intent intent = new Intent(getActivity(), NativeModeActivity.class);
+                startActivity(intent);
+                showToast("Native Mode Activated");
                 break;
             }
-            case R.id.info: {
-                Activity activity = getActivity();
-                if (null != activity) {
-                    new AlertDialog.Builder(activity)
-                            .setMessage(R.string.intro_message)
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show();
-                }
+            case R.id.local_mode: {
+                mComputingMode = LOCAL_MODE;
+                showToast("Local Mode Activated");
+                stopTimer();
+                setTimer();
                 break;
             }
+            case R.id.fog_basic: {
+                mComputingMode = FOG_BASIC_MODE;
+                changeSocket("5000");
+                showToast("Fog Basic Activated");
+                stopTimer();
+                setTimer();
+                break;
+            }
+            case R.id.fog_dnn: {
+                mComputingMode = FOG_DNN_MODE;
+                changeSocket("8080");
+                showToast("Fog DNN Activated");
+                stopTimer();
+                setTimer(1000, 1500);
+                break;
+            }
+            case R.id.fog_cloud: {
+                mComputingMode = FOG_CLOUD_MODE;
+                changeSocket("8080");
+                showToast("Fog Cloud Activated");
+                stopTimer();
+                setTimer(1000, 1500);
+                break;
+            }
+            case R.id.reset: {
+                mDetectionView.reset();
+                if(mSocket!=null){
+                    mSocket.disconnect();
+                    mSocket.off("detection response", onDetectionDoneMessage);
+                }
+                stopTimer();
+                break;
+            }
+//            case R.id.info: {
+//                Activity activity = getActivity();
+//                if (null != activity) {
+//                    new AlertDialog.Builder(activity)
+//                            .setMessage(R.string.intro_message)
+//                            .setPositiveButton(android.R.string.ok, null)
+//                            .show();
+//                }
+//            }
         }
     }
 
@@ -969,11 +1051,19 @@ public class CameraFragment extends Fragment
             return encImage;
         }
 
+
+        private String getNiceTime(){
+            DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+            String date = df.format(Calendar.getInstance().getTime());
+            return date;
+        }
+
         @Override
         public void run() {
             JSONObject sendData = new JSONObject();
             try {
                 sendData.put("imageData", encodeImage());
+                Log.i(TAG_MEASURE, "=> Send Detection:" + getNiceTime());
                 mSocket.emit("detection request", sendData);
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -982,33 +1072,65 @@ public class CameraFragment extends Fragment
 
     }
 
+
+
+
+//    private class BitmapFeeder implements Runnable {
+//
+//        /**
+//         * The Bitmap
+//         */
+//        private final Bitmap mBitmap;
+//
+//        BitmapFeeder(Bitmap bitmap) {
+//            mBitmap = bitmap;
+//        }
+//
+//        private Mat img2mat() {
+//            Mat cacheMat = new Mat();
+//            Bitmap bmp32 = mBitmap.copy(Bitmap.Config.ARGB_8888, true);
+//            Utils.bitmapToMat(bmp32, cacheMat);
+////            mBitmap.recycle();
+////            bmp32.recycle();
+//            return cacheMat;
+//        }
+//
+//        @Override
+//        public void run() {
+//            showToast("start Bitmap Feeder!");
+//            Mat mat = img2mat();
+//            showToast(String.valueOf(mat.getNativeObjAddr()));
+//            DetectionFrame [] rects = detect(mat.getNativeObjAddr());
+////            mat.release();
+//            getActivity().runOnUiThread(new frameRefreshRunnable(rects, mDetectionView));
+//        }
+//
+//    }
+
+
     private class BitmapFeeder implements Runnable {
 
         /**
          * The Bitmap
          */
         private final Bitmap mBitmap;
+        private FaceDetectionHelper mFaceDetectionHelper;
 
-//        private final Mat cacheMat = new Mat();
-
-        BitmapFeeder(Bitmap bitmap) {
+        BitmapFeeder(Bitmap bitmap, FaceDetectionHelper faceDetectionHelper) {
             mBitmap = bitmap;
+            mFaceDetectionHelper = faceDetectionHelper;
         }
 
         private Mat img2mat() {
-            Bitmap bmp32 = mBitmap.copy(Bitmap.Config.ARGB_8888, true);
-            Utils.bitmapToMat(bmp32, mCacheMat);
-//            mBitmap.recycle();
-//            bmp32.recycle();
+            Utils.bitmapToMat(mBitmap, mCacheMat);
+            Imgproc.cvtColor(mCacheMat, mCacheMat, Imgproc.COLOR_BGR2GRAY);
             return mCacheMat;
         }
 
         @Override
         public void run() {
-//            Mat mat = img2mat();
-
-            DetectionFrame [] rects = detect(mCacheMat.getNativeObjAddr());
-//            mat.release();
+            Mat mat = img2mat();
+            DetectionFrame[] rects = mFaceDetectionHelper.detect(mat, 30);
             getActivity().runOnUiThread(new frameRefreshRunnable(rects, mDetectionView));
         }
 
@@ -1027,7 +1149,6 @@ public class CameraFragment extends Fragment
         @Override
         public void run() {
             mDetectionView.refreshDetectionFrame(frames);
-            mDetectionView.invalidate();
         }
     }
 
@@ -1109,6 +1230,6 @@ public class CameraFragment extends Fragment
         }
     }
 
-    public native DetectionFrame[] detect(long addrRgba);
+//    public native DetectionFrame[] detect(long addrRgba);
 
 }

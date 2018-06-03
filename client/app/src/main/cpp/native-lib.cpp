@@ -29,8 +29,9 @@ std::vector<cv::Rect>* detect(cv::Mat& frame) {
 
     std::vector<cv::Rect> * faces = new std::vector<cv::Rect>();
     cv::Mat frame_gray;
-//    __android_log_print(ANDROID_LOG_ERROR, "opencv", "before color transfer", 1);
-    cvtColor( frame, frame_gray, cv::COLOR_RGBA2GRAY );
+    __android_log_print(ANDROID_LOG_ERROR, "opencv", "before color transfer", 1);
+    cvtColor( frame, frame_gray, cv::COLOR_BGR2GRAY );
+    __android_log_print(ANDROID_LOG_ERROR, "opencv", "after color transfer", 1);
     equalizeHist( frame_gray, frame_gray );
     //-- Detect faces
     face_cascade.detectMultiScale( frame_gray, *faces, 1.1, 2, 0|cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30) );
@@ -66,7 +67,7 @@ JNICALL Java_au_edu_sydney_uni_fogcomputingclient_CameraFragment_detect(
         jlong addrRgba /* this */){
     cv::Mat& frame = * (cv::Mat*)addrRgba;
     std::vector<cv::Rect>* rects = detect(frame);
-//    delete &frame;
+    delete &frame;
     size_t rectsSize = rects->size();
     jsize rectsJsize = rectsSize;
     jclass detectionFrameClass = (*env).FindClass("au/edu/sydney/uni/fogcomputingclient/DetectionFrame");
