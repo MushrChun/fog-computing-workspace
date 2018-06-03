@@ -87,9 +87,9 @@ def detect_face(imageStream):
         top, right, bottom, left = face_location
         newFrame = {}
         newFrame['x'] = left
-        newFrame['y'] = top
-        newFrame['w'] = right-left
-        newFrame['h'] = top-bottom
+        newFrame['y'] = bottom
+        newFrame['w'] = (right-left)
+        newFrame['h'] = (top-bottom)
         newFrame['label'] = 'face'
         frames.append(newFrame)
     return frames
