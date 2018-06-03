@@ -57,8 +57,11 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -117,6 +120,8 @@ public class MainFragment extends Fragment
      * Tag for the {@link Log}.
      */
     private static final String TAG = "MainFragment";
+
+    private static final String TAG_MEASURE = "MEASURE";
 
     /**
      * Camera state: Showing camera preview.
@@ -519,7 +524,7 @@ public class MainFragment extends Fragment
                 @Override
                 public void run() {
 
-//                    Log.e("mushrchun", "in return");
+                    Log.i(TAG_MEASURE, "<= Receive Detection:" + getNiceTime());
                     Gson gson = new Gson();
                     Type collectionType = new TypeToken<Collection<DetectionFrame>>(){}.getType();
 //                    Log.e("mushrchun", "in return");
@@ -531,11 +536,16 @@ public class MainFragment extends Fragment
 //                        showToast(frame.toString());
 //                    }
                     mDetectionView.refreshDetectionFrame(frames);
-                    mDetectionView.invalidate();
                 }
             });
         }
     };
+
+    private String getNiceTime(){
+        DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+        String date = df.format(Calendar.getInstance().getTime());
+        return date;
+    }
 
     private void requestCameraPermission() {
         if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
@@ -1041,11 +1051,19 @@ public class MainFragment extends Fragment
             return encImage;
         }
 
+
+        private String getNiceTime(){
+            DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+            String date = df.format(Calendar.getInstance().getTime());
+            return date;
+        }
+
         @Override
         public void run() {
             JSONObject sendData = new JSONObject();
             try {
                 sendData.put("imageData", encodeImage());
+                Log.i(TAG_MEASURE, "=> Send Detection:" + getNiceTime());
                 mSocket.emit("detection request", sendData);
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -1053,6 +1071,7 @@ public class MainFragment extends Fragment
         }
 
     }
+
 
 
 
@@ -1130,7 +1149,6 @@ public class MainFragment extends Fragment
         @Override
         public void run() {
             mDetectionView.refreshDetectionFrame(frames);
-            mDetectionView.invalidate();
         }
     }
 

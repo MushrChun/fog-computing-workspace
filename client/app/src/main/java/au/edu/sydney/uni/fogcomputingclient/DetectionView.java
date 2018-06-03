@@ -52,6 +52,7 @@ public class DetectionView extends View {
     public void refreshDetectionFrame(Collection<DetectionFrame>  newFrameSet){
         mFrames.clear();
         mFrames.addAll(newFrameSet);
+        invalidate();
     }
 
     public void reset(){
