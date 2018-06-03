@@ -72,15 +72,23 @@
             android:text="@string/fog_cloud"
             android:textSize="26px" />
 
-        <ImageButton
-            android:id="@+id/info"
-            style="@android:style/Widget.Material.Light.Button.Borderless"
+        <Button
+            android:id="@+id/reset"
             android:layout_width="0dp"
             android:layout_height="50dp"
             android:layout_weight="1"
-            android:contentDescription="@string/description_info"
-            android:src="@drawable/ic_action_info"
-            android:textSize="30px" />
+            android:text="@string/reset"
+            android:textSize="26px" />
+
+        <!--<ImageButton-->
+            <!--android:id="@+id/info"-->
+            <!--style="@android:style/Widget.Material.Light.Button.Borderless"-->
+            <!--android:layout_width="0dp"-->
+            <!--android:layout_height="50dp"-->
+            <!--android:layout_weight="1"-->
+            <!--android:contentDescription="@string/description_info"-->
+            <!--android:src="@drawable/ic_action_info"-->
+            <!--android:textSize="30px" />-->
 
     </LinearLayout>
 

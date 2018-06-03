@@ -96,13 +96,13 @@ public class MainFragment extends Fragment
     private static final String FRAGMENT_DIALOG = "dialog";
 
     private Socket mSocket;
-    {
-        try {
-//            mSocket = IO.socket("http://10.66.31.8:5000");
-//            mSocket = IO.socket("http://10.66.31.8:8000");
-            mSocket = IO.socket("http://10.66.31.8:8080");
-        } catch (URISyntaxException e) {}
-    }
+//    {
+//        try {
+////            mSocket = IO.socket("http://10.66.31.8:5000");
+////            mSocket = IO.socket("http://10.66.31.8:8000");
+//            mSocket = IO.socket("http://10.66.31.8:8080");
+//        } catch (URISyntaxException e) {}
+//    }
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -294,6 +294,7 @@ public class MainFragment extends Fragment
 
     private int mComputingMode = FOG_BASIC_MODE;
 
+    public final static int IDLE_MODE = -1;
     public final static int LOCAL_MODE = 0;
     public final static int FOG_BASIC_MODE = 1;
     public final static int FOG_DNN_MODE = 2;
@@ -418,7 +419,7 @@ public class MainFragment extends Fragment
         view.findViewById(R.id.fog_basic).setOnClickListener(this);
         view.findViewById(R.id.fog_dnn).setOnClickListener(this);
         view.findViewById(R.id.fog_cloud).setOnClickListener(this);
-        view.findViewById(R.id.info).setOnClickListener(this);
+        view.findViewById(R.id.reset).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
         mDetectionView = view.findViewById(R.id.detection);
     }
@@ -434,8 +435,10 @@ public class MainFragment extends Fragment
     public void onResume() {
         super.onResume();
         startBackgroundThread();
-        mSocket.connect();
-        mSocket.on("detection response", onDetectionDoneMessage);
+        if(mSocket!=null){
+            mSocket.connect();
+            mSocket.on("detection response", onDetectionDoneMessage);
+        }
 
         if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -459,20 +462,26 @@ public class MainFragment extends Fragment
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
 
-        setTimer();
     }
 
     @Override
     public void onPause() {
         closeCamera();
         stopBackgroundThread();
-        mSocket.disconnect();
-        mSocket.off("detection response", onDetectionDoneMessage);
+        mDetectionView.reset();
+        if(mSocket!=null){
+            mSocket.disconnect();
+            mSocket.off("detection response", onDetectionDoneMessage);
+        }
         stopTimer();
         super.onPause();
     }
 
     private void setTimer() {
+        setTimer(1000, 500);
+    }
+
+    public void setTimer(int delay, int period){
         mTimer = new Timer();
         mTimerTask = new TimerTask() {
             @Override
@@ -480,7 +489,7 @@ public class MainFragment extends Fragment
                 imgSend();
             }
         };
-        mTimer.schedule(mTimerTask, 1000, 500);
+        mTimer.schedule(mTimerTask, delay, period);
     }
 
     private void stopTimer() {
@@ -493,11 +502,11 @@ public class MainFragment extends Fragment
 
     private void imgSend() {
         Bitmap bitmap = mTextureView.getBitmap();
-        if(bitmap != null){
+        if(bitmap != null && mBackgroundHandler !=null){
             if(mComputingMode==LOCAL_MODE){
                 mBackgroundHandler.post(new BitmapFeeder(bitmap, mFaceDetectionHelper));
             }
-            else if(mComputingMode==FOG_BASIC_MODE){
+            else{
                 mBackgroundHandler.post(new BitmapShifter(bitmap, mSocket));
             }
         }
@@ -847,8 +856,10 @@ public class MainFragment extends Fragment
 
     private void changeSocket(String port) {
 
-        mSocket.disconnect();
-        mSocket.off("detection response", onDetectionDoneMessage);
+        if(mSocket!=null){
+            mSocket.disconnect();
+            mSocket.off("detection response", onDetectionDoneMessage);
+        }
         try {
             mSocket = IO.socket(FOG_NODE_URL + port);
         } catch (URISyntaxException e) {}
@@ -868,35 +879,52 @@ public class MainFragment extends Fragment
             case R.id.local_mode: {
                 mComputingMode = LOCAL_MODE;
                 showToast("Local Mode Activated");
+                stopTimer();
+                setTimer();
                 break;
             }
             case R.id.fog_basic: {
                 mComputingMode = FOG_BASIC_MODE;
                 changeSocket("5000");
                 showToast("Fog Basic Activated");
+                stopTimer();
+                setTimer();
                 break;
             }
             case R.id.fog_dnn: {
                 mComputingMode = FOG_DNN_MODE;
                 changeSocket("8080");
                 showToast("Fog DNN Activated");
+                stopTimer();
+                setTimer(1000, 1500);
                 break;
             }
             case R.id.fog_cloud: {
                 mComputingMode = FOG_CLOUD_MODE;
                 changeSocket("8080");
                 showToast("Fog Cloud Activated");
+                stopTimer();
+                setTimer(1000, 1500);
                 break;
             }
-            case R.id.info: {
-                Activity activity = getActivity();
-                if (null != activity) {
-                    new AlertDialog.Builder(activity)
-                            .setMessage(R.string.intro_message)
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show();
+            case R.id.reset: {
+                mDetectionView.reset();
+                if(mSocket!=null){
+                    mSocket.disconnect();
+                    mSocket.off("detection response", onDetectionDoneMessage);
                 }
+                stopTimer();
+                break;
             }
+//            case R.id.info: {
+//                Activity activity = getActivity();
+//                if (null != activity) {
+//                    new AlertDialog.Builder(activity)
+//                            .setMessage(R.string.intro_message)
+//                            .setPositiveButton(android.R.string.ok, null)
+//                            .show();
+//                }
+//            }
         }
     }
 

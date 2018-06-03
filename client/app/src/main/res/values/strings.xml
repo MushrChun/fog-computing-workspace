@@ -8,6 +8,7 @@
     <string name="fog_basic">Fog Basic Mode</string>
     <string name="fog_dnn">Fog DNN Mode</string>
     <string name="fog_cloud">Fog Cloud Mode</string>
+    <string name="reset">Reset</string>
     <string name="description_info">Info</string>
     <string name="info">Info</string>
     <string name="request_permission">This sample needs camera permission.</string>

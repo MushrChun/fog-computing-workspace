@@ -54,6 +54,11 @@ public class DetectionView extends View {
         mFrames.addAll(newFrameSet);
     }
 
+    public void reset(){
+        mFrames.clear();
+        invalidate();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);

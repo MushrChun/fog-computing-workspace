@@ -35,6 +35,8 @@ public class NativeModeActivity extends AppCompatActivity implements CameraBridg
     private float mRelativeFaceSize   = 0.2f;
     private int mAbsoluteFaceSize   = 0;
 
+    private long previousDetection = 0;
+
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
@@ -117,8 +119,14 @@ public class NativeModeActivity extends AppCompatActivity implements CameraBridg
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
+
         mRgba = inputFrame.rgba();
         mGray = inputFrame.gray();
+
+//        long nowDetection = System.currentTimeMillis();
+//        if(nowDetection -  previousDetection< 5000){
+//            return mRgba;
+//        }
 
 
         mAbsoluteFaceSize = 30;
@@ -139,6 +147,7 @@ public class NativeModeActivity extends AppCompatActivity implements CameraBridg
         for (int i = 0; i < facesArray.length; i++)
             Imgproc.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
 
+//        previousDetection = nowDetection;
         return mRgba;
     }
 
