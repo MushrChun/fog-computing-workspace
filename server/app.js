@@ -2,8 +2,15 @@ const app = require('http').createServer(handler);
 const io = require('socket.io')(app);
 const fs = require('fs');
 const cv = require('opencv');
+const moment = require('moment');
 
 app.listen(5000);
+
+console.log('app bootstrap!', getNiceTime());
+
+function getNiceTime(){
+  return moment().format('YYYY-MM-DD HH:mm:ss.SSS');
+}
 
 function handler(req, res) {
   fs.readFile(__dirname + '/index.html',
@@ -23,6 +30,7 @@ io.on('connection', function (socket) {
 
   socket.on('detection request', function (data) {
     console.log('detection request');
+    console.log('<= start detection at:', getNiceTime());
     const imageBuf = Buffer.from(data.imageData, 'base64');
     cv.readImage(imageBuf, (err, im) => {
       if (err) {
@@ -43,7 +51,8 @@ io.on('connection', function (socket) {
           newFrame.label = 'face';
           frames.push(newFrame);
         });
-        console.log(faces);
+        // console.log(faces);
+        console.log('<= finish detection at:', getNiceTime());
         socket.emit('detection response', frames);
       });
     });
