@@ -1,5 +1,5 @@
 face_recognition
-socketio
+python-socketio
 eventlet
 flask
 aiohttp

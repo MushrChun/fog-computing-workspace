@@ -36,10 +36,10 @@ def disconnect(sid):
 known_face_names = []
 
 def find_images():
-    images = os.listdir('../instructors')
+    images = os.listdir('./instructors')
     global known_face_names
     known_face_names.extend(images)
-    image_paths = ['../instructors/'+ x for x in images]
+    image_paths = ['./instructors/'+ x for x in images]
     print(images)
     return image_paths
 

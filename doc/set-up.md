@@ -20,3 +20,6 @@
       python3 server-aio.py
 
       node app.js
+
+pip3 not work with python3:
+python3 -m ensurepip --upgrade

@@ -15,7 +15,7 @@ COPY . /root/python-dlib
 RUN cd /root/python-dlib && \
     pip3 install -r requirements.txt
 
-EXPOSE 8000
+EXPOSE 8080
 
 CMD cd /root/python-dlib && \
-    python3 /root/python-dlib/server.py
+    python3 /root/python-dlib/server-aio.py
