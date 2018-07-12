@@ -898,7 +898,7 @@ public class MainFragment extends Fragment
                 changeSocket("5000");
                 showToast("Fog Basic Activated");
                 stopTimer();
-                setTimer();
+                setTimer(1000, 2000);
                 break;
             }
             case R.id.fog_dnn: {
@@ -906,7 +906,7 @@ public class MainFragment extends Fragment
                 changeSocket("8080");
                 showToast("Fog DNN Activated");
                 stopTimer();
-                setTimer(1000, 1500);
+                setTimer(1000, 6000);
                 break;
             }
             case R.id.fog_cloud: {
@@ -914,7 +914,7 @@ public class MainFragment extends Fragment
                 changeSocket("8080");
                 showToast("Fog Cloud Activated");
                 stopTimer();
-                setTimer(1000, 1500);
+                setTimer(1000, 3000);
                 break;
             }
             case R.id.reset: {
